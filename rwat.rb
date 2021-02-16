@@ -53,11 +53,10 @@ section 'Baseline Commit' do
 end
 
 section 'Install gems' do
-  gem 'devise'      if options[:graphql] # Authentication (http://devise.plataformatec.com.br/)
+  gem 'devise'      if options[:devise] # Authentication (http://devise.plataformatec.com.br/)
   gem 'graphql'     if options[:graphql] # Ruby Graphql (http://graphql-ruby.org/)
 
   gem 'inflections' # Portuguese inflections and others (https://davidcel.is/inflections/)
-  gem 'simple_form' # Rails forms made easy (https://github.com/plataformatec/simple_form)
   gem 'slim'        # lightweight templating engine (http://slim-lang.com/)
   gem 'slim-rails'  # Slim generators (https://github.com/slim-template/slim-rails)
 
@@ -86,10 +85,6 @@ section 'RSpec Setup', options[:rspec] do
   commit 'Rspec installed'
 end
 
-section 'Simple Form Setup' do
-  generate 'simple_form:install --bootstrap'
-  commit 'Simple Form installed'
-end
 #
 #
 #  Add or replace files
