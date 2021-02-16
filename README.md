@@ -6,7 +6,6 @@ Default Template (rwat.rb)
 * Locales: pt-BR
 * HTML default template engine: slim
 * Test: RSpec
-* Deployment: mina
 * API: GraphQL
 * Welcome Page: pages#index
 * Devlopment tools: Rubocop
@@ -14,7 +13,7 @@ Default Template (rwat.rb)
 Usage
 -----
 1. Create a new Rails application
-$rails new appname
+$rails new appname -d postgresql
 2. Run rwat template
 $ rails app:template LOCATION=https://raw.githubusercontent.com/gferraz/rwats/master/rwat.rb
 3. If step 3 doesn't work try:
