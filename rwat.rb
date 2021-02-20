@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 #
 # Basic Rails Web Application Template
 #
@@ -9,18 +7,236 @@ TEMPLATE_URL = 'https://github.com/gferraz/rwats'
 TEMPLATE_FILES_URL = TEMPLATE_URL + '/raw/master'
 APP_VERSION = '0.0.1'
 
-def summary(options)
-  text = <<-SUMMARY
-    Info
-    Application: ............ #{app_name} #{APP_VERSION}
-    Locales: ................ pt-BR
-    Default template engine:  Slim
-  SUMMARY
-  text += "\n    Authentication: ......... Devise"  if options[:devise]
-  text += "\n    API: .................... GraphQL" if options[:graphql]
-  text += "\n    Test: ................... RSpec"   if options[:rspec]
-  text += "\n    Rubocop cleanup:......... Done"    if options[:rubocop]
-  text
+SETUP = {
+  application:      "#{app_name} #{APP_VERSION}",
+  api:              'none',
+  authentication:   'none',
+  frontend:         'Asset Pipeline',
+  gems:             [],
+  locales:          ['pt-BR'],
+  template_engines: ['erb, slim'],
+  test:             'minitest'
+}
+
+def banner(title, length = 80)
+  dashes = '=' * length
+  puts
+  say dashes
+  say "  #{title}"
+  say dashes
+  puts
+end
+
+def add_to_gemfile(gems)
+  gems.each do |gem|
+    gem gem.name, gem.options
+  end
+end
+
+class GemList
+
+  Gem = Struct.new(:name, :package, :options)
+
+  attr_reader :gems
+
+  def initialize(package)
+    @package = package
+    @gems = []
+  end
+
+  def add(name, options = {})
+    gem = Gem.new name, @package, options
+    @gems << gem
+    gem
+  end
+end
+
+class Package
+
+  attr_accessor :name, :desc
+  attr_writer :optional
+
+  def initialize(name)
+    @name = name
+    @gem_list = GemList.new(self)
+    @installed = false
+    @optional = false
+  end
+
+  def gems
+    yield @gem_list if block_given?
+    @gem_list.gems
+  end
+
+  def install(&block)
+    @script = block
+  end
+
+  def install!
+    if installed?
+      say "#{name} already installed.", :blue
+    else
+      puts "Installing #{name} script"
+      @script&.call
+      @installed = true
+    end
+  end
+
+  def installed?
+    @installed
+  end
+
+  def required?
+    !@optional
+  end
+end
+
+class Application
+
+  attr_reader :packages
+
+  def initialize(name)
+    @name = name
+    @packages = []
+  end
+
+  def package(name)
+    package = packages.detect {|p| p.name == name}
+    package ||= Package.new(name)
+    yield package if block_given?
+    @packages << package
+    package
+  end
+
+  def required_packages
+    packages.select(&:required?)
+  end
+
+  def gems(packages)
+    packages.collect(&:gems).flatten.uniq(&:name)
+  end
+
+  def installed_gems
+    gemfile = File.read 'Gemfile'
+    installed = gems(packages).select do |g|
+      found = gemfile.scan /^\s*gem\s+['"]#{g.name}['"]/
+      found.any?
+    end
+    installed
+  end
+
+  def gems_to_install(packages)
+    gems(packages) - installed_gems
+  end
+
+  def install!(packages)
+    packages.each(&:install!)
+  end
+end
+
+app = Application.new(app_name)
+
+app.package(:devise) do |pack|
+  pack.desc =  'Devise authetication with doorkeper and i18n'
+  pack.optional = true
+  pack.gems do |gem|
+    gem.add 'devise'
+    gem.add 'devise-i18n'
+    gem.add 'devise-doorkeeper'
+  end
+
+  pack.install do
+    generate 'devise:install'
+  end
+end
+
+app.package(:graphql) do |pack|
+  pack.desc ='GraphQL API query language'
+  pack.optional = true
+  pack.gems do |gem|
+    gem.add 'graphql'
+  end
+  pack.install do
+    generate 'graphql:install'
+  end
+end
+
+app.package(:minitest) do |pack|
+  pack.desc ='Minitest test framework'
+  pack.optional = true
+  pack.gems do |gem|
+    gem.add 'minitest-rails',    group: [:development, :test]
+    gem.add 'factory_bot_rails', group: [:development, :test]
+    gem.add 'rubocop-minitest',  group: [:development, :test], require: false
+  end
+  pack.install do
+    generate 'graphql:install'
+  end
+end
+
+app.package(:pt_br) do |pack|
+  pack.desc = 'i18n Localization: pt-BR'
+  pack.gems do |gem|
+    gem.add 'inflections'
+  end
+  pack.install do
+    get 'https://github.com/svenfuchs/rails-i18n/raw/master/rails/locale/pt-BR.yml', 'config/locales/pt-BR.yml'
+  end
+end
+
+app.package(:rspec) do |pack|
+  pack.desc = 'Rspec test framework, along Factory Bot'
+  pack.optional = true
+  pack.gems do |gem|
+    gem.add 'rspec-rails',       group: [:development, :test]
+    gem.add 'factory_bot_rails', group: [:development, :test]
+    gem.add 'rubocop-rspec',     group: [:development, :test], require: false
+  end
+  pack.install do
+    generate 'rspec:install'
+  end
+end
+
+app.package(:rubocop) do |pack|
+  pack.desc = 'Rubocop code linter'
+  pack.gems do |gem|
+    gem.add 'rubocop',          require: false
+    gem.add 'rubocop-rails',    require: false
+  end
+  pack.install do
+    generate 'rspec:install'
+  end
+end
+
+app.package(:slim) do |pack|
+  pack.desc = 'Slim HTML template'
+  pack.gems do |gem|
+    gem.add 'slim'
+    gem.add 'slim-rails'
+    gem.add 'erb2slim',  require: false, group: :development
+    gem.add 'html2slim', require: false, group: :development
+  end
+  pack.install do
+    say 'Convert erb scripts to slim'
+    run 'erb2slim -d app/views/layouts/*.html.erb'
+  end
+end
+
+app.package(:webpack) do |pack|
+  pack.desc = 'Webpack'
+  pack.gems do |gem|
+    gem.add 'webpacker'
+  end
+  pack.install do
+    rails_command 'webpacker:install'
+
+    replace 'config/webpacker.yml', 'app/javascript', 'app/frontend'
+    run 'mv app/javascript app/frontend'
+    run 'rm -rf app/assets'
+    run 'rm -rf lib/assets'
+    run 'rm -rf vendor/assets'
+    commit 'Webpack installed'
+  end
 end
 
 def commit(message)
@@ -28,123 +244,155 @@ def commit(message)
   git commit: %(-m '#{message}')
 end
 
+def summary
+  sum = SETUP.collect do |attribute, value|
+    attribute = attribute.name.titleize
+    val = value.is_a?(Array) ? value.join(', ') : value.to_s
+    dots = "." * (60 - attribute.size - val.size)
+    "#{attribute}: #{dots} #{val}"
+  end
+  sum.join("\n")
+end
+
+
+def yaml(path)
+  yaml = YAML.load File.read path
+  new_yaml = yaml.deep_dup
+  yield new_yaml
+  if yaml == new_yaml
+    say "identical #{path}.", :blue
+  else
+    File.write path, new_yaml
+    say "#{path} updated.", :green
+  end
+end
+
+def replace(path, old_text, new_text)
+  content = File.read path
+  new_content = content.gsub old_text, new_text
+  if content == new_content
+    say "identical #{path}.", :blue
+  else
+    File.write path, new_content
+    say "#{path} updated.", :green
+  end
+end
+
+
 def section(title, condition = true)
   return unless condition
-
-  dashes = '=' * (title.length + 4)
+  dashes = '=' * 40
   puts
-  puts dashes
-  puts "  #{title}"
-  puts dashes
+  say dashes
+  say "  #{title}"
+  say dashes
+  puts
   yield
 end
 
-options = {}
+SELECTED = []
 
-section 'Application Options' do
-  options[:devise] = yes?('Use Devise? [yN]')
-  options[:graphql] = yes?('Use Graphql? [yN]')
-  options[:rspec] = yes?('Use RSpec? [yN]')
-  options[:rubocop] = yes?('Rubocop Cleanup? [yN]')
-end
-
-section 'Baseline Commit' do
-  commit 'Initial application setup'
+section 'Application setup selection' do
+  puts "Available packages"
+  puts '------------------'
+  app.packages.each do |pack|
+    say "  #{pack.name}: \t#{pack.desc}"
+  end
+  puts
+  if yes? 'Select optional packages? [yN]'
+    puts
+    SELECTED << :devise  if yes?('Authetication with Devise? [yN]')
+    SELECTED << :graphql if yes?('API with Graphql? [yN]')
+    SELECTED << (yes?('Tests with RSpec? [yN]') ? :rspec : :minitest)
+  end
+  puts '--------------------------------'
+  puts 'Packages to be installed'
+  say app.required_packages.map(&:name).join(',')
+  say SELECTED.join(", "), :yellow
+  next if yes?('Confirm and continue?')
+  say "Nothing installed. Thanks. Good bye", :blue
+  exit
 end
 
 section 'Install gems' do
-  gem 'devise'      if options[:devise] # Authentication (http://devise.plataformatec.com.br/)
-  gem 'graphql'     if options[:graphql] # Ruby Graphql (http://graphql-ruby.org/)
+  selected = SELECTED.map { |name| app.package(name) }
+  gems = app.gems_to_install(app.required_packages + selected)
+  add_to_gemfile gems
 
-  gem 'inflections' # Portuguese inflections and others (https://davidcel.is/inflections/)
-  gem 'slim'        # lightweight templating engine (http://slim-lang.com/)
-  gem 'slim-rails'  # Slim generators (https://github.com/slim-template/slim-rails)
-
-  gem_group :development do
-    gem 'erb2slim',      require: false
-    gem 'graphiql-rails'
-    gem 'html2slim',     require: false
-    gem 'rubocop',       require: false
+  if gems.any?
+    run_bundle
+    commit "Additional gems installed: #{gems.map(&:name).join(', ')}"
+  else
+    say 'No new gems were added.', :blue
   end
+  say 'Gems instalation complete', :green
 
-  gem_group :test, :development do
-    gem 'rspec-rails' if options[:rspec]
-  end
-
-  run_bundle
-  commit 'Additional gems installed'
 end
 
-section 'Graphql Setup', options[:graphql] do
-  generate 'graphql:install'
-  commit 'graphql installed'
+section 'Install Packages' do
+  selected = SELECTED.map { |name| app.package(name) }
+  app.install!(app.required_packages)
+  app.install!(selected)
 end
 
-section 'RSpec Setup', options[:rspec] do
-  generate 'rspec:install'
-  commit 'Rspec installed'
-end
 
-#
-#
 #  Add or replace files
 #
 section 'Template Files' do
   file 'CHANGELOG.md', <<~CHANGELOG
-    # Change log
+    ## #{app.name} Releases
+    ### [#{APP_VERSION}] (unreleased)
+    * Added Features *
 
-    ## [#{APP_VERSION}] (#{Date.current})
-      ** Added Features **
+    * Fixed Issues *
 
-      ** Fixed Issues **
+    * Deprecations *
 
   CHANGELOG
-
-  run 'cp config/database.yml config/database.sample.yml'
-  append_to_file '.gitignore', '/config/database.yml'
-
-  #
-  # Download pt-BR localization
-  #
-  puts '* Localization (pt-BR)'
-  get 'https://github.com/svenfuchs/rails-i18n/raw/master/rails/locale/pt-BR.yml', 'config/locales/pt-BR.yml'
-  commit 'Added project files'
 end
+
+section 'Ignore database.yml' do
+  run 'cp config/database.yml config/database.sample.yml'
+
+  append_to_file '.gitignore', '/config/database.yml'
+end
+
 
 #
 # Application Configuration
 #
-section 'Slim Configuration' do
-  run 'erb2slim -d app/views/layouts/*'
 
-  generators = <<-GENERATORS
+section 'Update Application generators configuration' do
+  gen_config = {}
+  gen_config[:template_engine] = ':slim'
+  gen_config[:assets] = false
+  gen_config[:scaffold_stylesheet] = false
 
-      config.generators do |g|
-        g.template_engine :slim
-      end
-  GENERATORS
-  application generators
-  commit 'Slim configuration'
+  generators = gen_config.collect do |key, value|
+    "    config.generators.#{key} #{value}"
+  end
+  application generators.join("\n")
+  commit 'Application Generators config updated'
 end
 
 #
 # Create an Welcome Page
 #
 section 'Welcome Page' do
-  route "root :to => 'pages#index'"
-  generate :controller, 'pages', 'index'
+  route "root :to => 'static#index'"
+  generate :controller, 'static', 'index', '--skipe-assets', '--skip-collision-check'
 
-  page_file = 'app/views/pages/index.html.slim'
+  page_file = 'app/views/static/index.html.slim'
 
   prepend_to_file page_file, <<~WELCOME
     h1 #{app_name.titleize} Home Page
     p
-      | Generated with Gilson Rails application template
+      | Generated with Rails web application template (rwat)
       a(href='#{TEMPLATE_URL}') #{TEMPLATE_NAME}
       | template
     pre
       |
-    #{summary(options)}
+    #{summary.join("\n")}
     p
       | Edit me in
       em #{page_file}
@@ -178,13 +426,13 @@ section 'Cleanup code with rubocop' do
       Enabled: false
 
   RUBOCOP
-  run 'rubocop -a' if options[:rubocop]
-  commit 'Rubocop'
+  run 'rubocop -a' if SELECTED[:rubocop]
+  commit 'Rubocop run'
 end
 
 #
 # Print template summary
 #
 section 'Configuration Summary' do
-  puts summary(options)
+  puts summary
 end
