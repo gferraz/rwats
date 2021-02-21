@@ -18,21 +18,6 @@ SETUP = {
   test: 'minitest'
 }
 
-def banner(title, length = 80)
-  dashes = '=' * length
-  puts
-  say dashes
-  say "  #{title}"
-  say dashes
-  puts
-end
-
-def add_to_gemfile(gems)
-  gems.each do |gem|
-    gem gem.name, gem.options
-  end
-end
-
 class GemList
   Gem = Struct.new(:name, :package, :options)
 
@@ -166,7 +151,7 @@ app.package(:minitest) do |pack|
     gem.add 'rubocop-minitest',  group: %i[development test], require: false
   end
   pack.install do
-    # generate 'graphql:install'
+    generate "minitest:install"
   end
 end
 
@@ -201,7 +186,6 @@ app.package(:rubocop) do |pack|
   end
   pack.install do
     run 'rubocop -a'
-    commit 'Rubocop run'
   end
 end
 
@@ -232,7 +216,6 @@ app.package(:webpack) do |pack|
     run 'rm -rf app/assets'
     run 'rm -rf lib/assets'
     run 'rm -rf vendor/assets'
-    commit 'Webpack installed'
   end
 end
 
@@ -312,9 +295,12 @@ section 'Application setup selection' do
 end
 
 section 'Install gems' do
+  next
   selected = SELECTED.map { |name| app.package(name) }
   gems = app.gems_to_install(app.required_packages + selected)
-  add_to_gemfile gems
+  gems.each do |gem|
+    gem gem.name, gem.options
+  end
 
   if gems.any?
     run_bundle
@@ -326,6 +312,7 @@ section 'Install gems' do
 end
 
 section 'Install Packages' do
+  next
   selected = SELECTED.map { |name| app.package(name) }
   app.install!(app.required_packages)
   app.install!(selected)
@@ -334,16 +321,9 @@ end
 #  Add or replace files
 #
 section 'Template Files' do
-  file 'CHANGELOG.md', <<~CHANGELOG
-    ## #{app.name} Releases
-    ### [#{APP_VERSION}] (unreleased)
-    * Added Features *
-
-    * Fixed Issues *
-
-    * Deprecations *
-
-  CHANGELOG
+  get TEMPLATE_FILES_URL + '/templates/README.md',    'README.md'
+  get TEMPLATE_FILES_URL + '/templates/CHANGELOG.md', 'CHANGELOG.md'
+  exit
 end
 
 section 'Ignore database.yml' do
