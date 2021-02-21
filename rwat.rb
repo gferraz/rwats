@@ -179,14 +179,6 @@ app.package(:rubocop) do |pack|
     gem.add 'rubocop',          require: false
     gem.add 'rubocop-rails',    require: false
   end
-  pack.install do
-    binding.irb
-    if File.exist? '.rubocop.yml'
-      say '.rubocop.yml already exists', :blue
-    else
-      get template_file_url('.rubocop.yml'), '.rubocop.yml'
-    end
-  end
 end
 
 app.package(:slim) do |pack|
@@ -380,14 +372,18 @@ section 'Welcome Page' do
   commit 'Welcome page sample added'
 end
 
-section 'Cleanup code with rubocop' do
+section 'rubocop plugins' do
   if File.exists? '.rubocop.yml'
     say '.rubocop.yml already exists', :blue
   else
     get template_file_url('.rubocop.yml'), '.rubocop.yml'
+    reqs = []
+    reqs << "  - rubocop-minitest"   if app.package(:minitest).installed?
+    reqs << "  - rubocop-rspec"      if app.package(:rspec).installed?
+    insert_into_file '.rubocop.yml',  reqs.join("\n"), after: "require:\n"
+    run 'rubocop -a'
+    commit 'Rubocop run'
   end
-  run 'rubocop -a'
-  commit 'Rubocop run'
 end
 
 #
