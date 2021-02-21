@@ -104,12 +104,28 @@ class Application
     end
   end
 
-  def gems_to_install(packages)
-    gems(packages) - installed_gems
+  def configure(packages_names)
+    selected_packages = packages_names.uniq.map { |name| package(name) }
+    @packages_to_install = required_packages + selected_packages
+    @packages_to_install.uniq!
   end
 
-  def install!(packages)
-    packages.each(&:install!)
+  def configuration
+    @packages_to_install ? @packages_to_install.map(&:name) : []
+  end
+
+  def included?(name)
+    !!@packages_to_install&.detect(&:name)
+  end
+
+  def gems_to_install
+    raise StandardError, 'No packages to install, call #configure(packages) first.' unless @packages_to_install
+    gems(@packages_to_install) - installed_gems
+  end
+
+  def install!
+    raise StandardError, 'No packages to install, call #configure(packages) first.' unless @packages_to_install
+    @packages_to_install.each(&:install!)
   end
 end
 
@@ -262,17 +278,6 @@ def template_file_url(template)
   "https://raw.githubusercontent.com/gferraz/rwats/master/templates/#{template}"
 end
 
-def packages_to_install
-  @packages_to_install ||= []
-  @packages_to_install.compact!
-  @packages_to_install.sort!
-  @packages_to_install
-end
-
-def selected_packages
-  @selected_packages ||= []
-end
-
 section 'Application setup selection' do
   puts 'Available packages'
   puts '------------------'
@@ -281,14 +286,16 @@ section 'Application setup selection' do
     say "  #{pack.name}: \t#{pack.desc}"
   end
   puts
+  selected_packages = []
   if yes? 'Select optional packages? [yN]'
     selected_packages << :devise  if yes?('  Authetication with Devise/Doorkeeper? [yN]')
     selected_packages << :graphql if yes?('  API with Graphql? [yN]')
   end
   selected_packages << (yes?('  Tests with RSpec? [yN]') ? :rspec : :minitest)
   puts '--------------------------------'
-  packages_to_install = app.required_packages.map(&:name) + selected_packages
-  say "Packages to config: #{packages_to_install.join(', ')}", :cyan
+  app.configure selected_packages
+
+  say "Packages to set up: #{app.configuration.join(', ')}", :cyan
   next if yes?('Confirm and continue?')
 
   say 'Nothing installed. Thanks. Good bye', :blue
@@ -296,9 +303,7 @@ section 'Application setup selection' do
 end
 
 section 'Install gems' do
-  selected = selected_packages.map { |name| app.package(name) }
-  gems = app.gems_to_install(app.required_packages + selected)
-
+  gems = app.gems_to_install
   if gems.any?
     gems.each do |gem|
       gem gem.name, gem.options
@@ -312,9 +317,7 @@ section 'Install gems' do
 end
 
 section 'Install Packages' do
-  selected = selected_packages.map { |name| app.package(name) }
-  app.install!(app.required_packages)
-  app.install!(selected)
+  app.install!
 end
 
 #  Add or replace files
