@@ -1,24 +1,20 @@
 require:
-  
 
 AllCops:
   NewCops: enable
 
+Layout/LineLength:
+  Max: 120
+
 Metrics/BlockLength:
   Exclude:
     - 'config/**/*'
-
-Metrics/LineLength:
-  Max: 120
-
 Metrics/MethodLength:
   Max: 20
 
 Style/Documentation:
   Enabled: false
-
 Style/FrozenStringLiteralComment:
   Enabled: false
-
 Style/RescueStandardError:
   Enabled: false
