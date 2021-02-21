@@ -8,14 +8,14 @@ TEMPLATE_FILES_URL = TEMPLATE_URL + '/raw/master'
 APP_VERSION = '0.0.1'
 
 SETUP = {
-  application:      "#{app_name} #{APP_VERSION}",
-  api:              'none',
-  authentication:   'none',
-  frontend:         'Asset Pipeline',
-  gems:             [],
-  locales:          ['pt-BR'],
+  application: "#{app_name} #{APP_VERSION}",
+  api: 'none',
+  authentication: 'none',
+  frontend: 'Asset Pipeline',
+  gems: [],
+  locales: ['pt-BR'],
   template_engines: ['erb, slim'],
-  test:             'minitest'
+  test: 'minitest'
 }
 
 def banner(title, length = 80)
@@ -34,7 +34,6 @@ def add_to_gemfile(gems)
 end
 
 class GemList
-
   Gem = Struct.new(:name, :package, :options)
 
   attr_reader :gems
@@ -52,7 +51,6 @@ class GemList
 end
 
 class Package
-
   attr_accessor :name, :desc
   attr_writer :optional
 
@@ -92,8 +90,7 @@ class Package
 end
 
 class Application
-
-  attr_reader :packages
+  attr_reader :name, :packages
 
   def initialize(name)
     @name = name
@@ -101,7 +98,7 @@ class Application
   end
 
   def package(name)
-    package = packages.detect {|p| p.name == name}
+    package = packages.detect { |p| p.name == name }
     package ||= Package.new(name)
     yield package if block_given?
     @packages << package
@@ -118,11 +115,10 @@ class Application
 
   def installed_gems
     gemfile = File.read 'Gemfile'
-    installed = gems(packages).select do |g|
+    gems(packages).select do |g|
       found = gemfile.scan /^\s*gem\s+['"]#{g.name}['"]/
       found.any?
     end
-    installed
   end
 
   def gems_to_install(packages)
@@ -137,7 +133,7 @@ end
 app = Application.new(app_name)
 
 app.package(:devise) do |pack|
-  pack.desc =  'Devise authetication with doorkeper and i18n'
+  pack.desc = 'Devise authetication with doorkeper and i18n'
   pack.optional = true
   pack.gems do |gem|
     gem.add 'devise'
@@ -151,7 +147,7 @@ app.package(:devise) do |pack|
 end
 
 app.package(:graphql) do |pack|
-  pack.desc ='GraphQL API query language'
+  pack.desc = 'GraphQL API query language'
   pack.optional = true
   pack.gems do |gem|
     gem.add 'graphql'
@@ -162,15 +158,15 @@ app.package(:graphql) do |pack|
 end
 
 app.package(:minitest) do |pack|
-  pack.desc ='Minitest test framework'
+  pack.desc = 'Minitest test framework'
   pack.optional = true
   pack.gems do |gem|
-    gem.add 'minitest-rails',    group: [:development, :test]
-    gem.add 'factory_bot_rails', group: [:development, :test]
-    gem.add 'rubocop-minitest',  group: [:development, :test], require: false
+    gem.add 'minitest-rails',    group: %i[development test]
+    gem.add 'factory_bot_rails', group: %i[development test]
+    gem.add 'rubocop-minitest',  group: %i[development test], require: false
   end
   pack.install do
-    generate 'graphql:install'
+    # generate 'graphql:install'
   end
 end
 
@@ -188,9 +184,9 @@ app.package(:rspec) do |pack|
   pack.desc = 'Rspec test framework, along Factory Bot'
   pack.optional = true
   pack.gems do |gem|
-    gem.add 'rspec-rails',       group: [:development, :test]
-    gem.add 'factory_bot_rails', group: [:development, :test]
-    gem.add 'rubocop-rspec',     group: [:development, :test], require: false
+    gem.add 'rspec-rails',       group: %i[development test]
+    gem.add 'factory_bot_rails', group: %i[development test]
+    gem.add 'rubocop-rspec',     group: %i[development test], require: false
   end
   pack.install do
     generate 'rspec:install'
@@ -204,7 +200,8 @@ app.package(:rubocop) do |pack|
     gem.add 'rubocop-rails',    require: false
   end
   pack.install do
-    generate 'rspec:install'
+    run 'rubocop -a'
+    commit 'Rubocop run'
   end
 end
 
@@ -248,12 +245,11 @@ def summary
   sum = SETUP.collect do |attribute, value|
     attribute = attribute.name.titleize
     val = value.is_a?(Array) ? value.join(', ') : value.to_s
-    dots = "." * (60 - attribute.size - val.size)
+    dots = '.' * (60 - attribute.size - val.size)
     "#{attribute}: #{dots} #{val}"
   end
   sum.join("\n")
 end
-
 
 def yaml(path)
   yaml = YAML.load File.read path
@@ -278,9 +274,9 @@ def replace(path, old_text, new_text)
   end
 end
 
-
 def section(title, condition = true)
   return unless condition
+
   dashes = '=' * 40
   puts
   say dashes
@@ -293,7 +289,7 @@ end
 SELECTED = []
 
 section 'Application setup selection' do
-  puts "Available packages"
+  puts 'Available packages'
   puts '------------------'
   app.packages.each do |pack|
     say "  #{pack.name}: \t#{pack.desc}"
@@ -303,14 +299,15 @@ section 'Application setup selection' do
     puts
     SELECTED << :devise  if yes?('Authetication with Devise? [yN]')
     SELECTED << :graphql if yes?('API with Graphql? [yN]')
-    SELECTED << (yes?('Tests with RSpec? [yN]') ? :rspec : :minitest)
   end
+  SELECTED << (yes?('Tests with RSpec? [yN]') ? :rspec : :minitest)
   puts '--------------------------------'
   puts 'Packages to be installed'
   say app.required_packages.map(&:name).join(',')
-  say SELECTED.join(", "), :yellow
+  say SELECTED.join(', '), :yellow
   next if yes?('Confirm and continue?')
-  say "Nothing installed. Thanks. Good bye", :blue
+
+  say 'Nothing installed. Thanks. Good bye', :blue
   exit
 end
 
@@ -326,7 +323,6 @@ section 'Install gems' do
     say 'No new gems were added.', :blue
   end
   say 'Gems instalation complete', :green
-
 end
 
 section 'Install Packages' do
@@ -334,7 +330,6 @@ section 'Install Packages' do
   app.install!(app.required_packages)
   app.install!(selected)
 end
-
 
 #  Add or replace files
 #
@@ -356,7 +351,6 @@ section 'Ignore database.yml' do
 
   append_to_file '.gitignore', '/config/database.yml'
 end
-
 
 #
 # Application Configuration
