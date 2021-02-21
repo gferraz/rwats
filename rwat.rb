@@ -1,11 +1,9 @@
 #
 # Basic Rails Web Application Template
 #
-TEMPLATE_NAME = 'rwat'
-
-TEMPLATE_URL = 'https://github.com/gferraz/rwats'
-TEMPLATE_FILES_URL = TEMPLATE_URL + '/raw/master'
-APP_VERSION = '0.0.1'
+TEMPLATE_URL = 'https://github.com/gferraz/rwats'.freeze
+TEMPLATE_NAME = 'rwat'.freeze
+APP_VERSION = '0.0.1'.freeze
 
 SETUP = {
   application: "#{app_name} #{APP_VERSION}",
@@ -16,7 +14,7 @@ SETUP = {
   locales: ['pt-BR'],
   template_engines: ['erb, slim'],
   test: 'minitest'
-}
+}.freeze
 
 class GemList
   Gem = Struct.new(:name, :package, :options)
@@ -210,9 +208,9 @@ app.package(:webpack) do |pack|
 
     gsub_file 'config/webpacker.yml', 'app/javascript', 'app/frontend', force: true
     run 'mv app/javascript app/frontend'
-    run 'rm -rf app/assets'
-    run 'rm -rf lib/assets'
-    run 'rm -rf vendor/assets'
+    remove_dir 'app/assets'
+    remove_dir 'lib/assets'
+    remove_dir 'vendor/assets'
   end
 end
 
@@ -232,7 +230,7 @@ def summary
 end
 
 def yaml(path)
-  yaml = YAML.load File.read path
+  yaml = YAML.safe_load File.read path
   new_yaml = yaml.deep_dup
   yield new_yaml
   if yaml == new_yaml
@@ -254,9 +252,7 @@ def replace(path, old_text, new_text)
   end
 end
 
-def section(title, condition = true)
-  return unless condition
-
+def section(title)
   dashes = '=' * 40
   puts
   say dashes
@@ -266,7 +262,13 @@ def section(title, condition = true)
   yield
 end
 
-SELECTED = []
+def template_file_url(template)
+  "https://raw.githubusercontent.com/gferraz/rwats/master/templates/#{template}"
+end
+
+def selected_packages
+  @selected_packages ||= []
+end
 
 section 'Application setup selection' do
   puts 'Available packages'
@@ -277,14 +279,14 @@ section 'Application setup selection' do
   puts
   if yes? 'Select optional packages? [yN]'
     puts
-    SELECTED << :devise  if yes?('Authetication with Devise? [yN]')
-    SELECTED << :graphql if yes?('API with Graphql? [yN]')
+    selected_packages << :devise  if yes?('Authetication with Devise? [yN]')
+    selected_packages << :graphql if yes?('API with Graphql? [yN]')
   end
-  SELECTED << (yes?('Tests with RSpec? [yN]') ? :rspec : :minitest)
+  selected_packages << (yes?('Tests with RSpec? [yN]') ? :rspec : :minitest)
   puts '--------------------------------'
   puts 'Packages to be installed'
   say app.required_packages.map(&:name).join(',')
-  say SELECTED.join(', '), :yellow
+  say selected_packages.join(', '), :yellow
   next if yes?('Confirm and continue?')
 
   say 'Nothing installed. Thanks. Good bye', :blue
@@ -292,14 +294,13 @@ section 'Application setup selection' do
 end
 
 section 'Install gems' do
-  next
-  selected = SELECTED.map { |name| app.package(name) }
+  selected = selected_packages.map { |name| app.package(name) }
   gems = app.gems_to_install(app.required_packages + selected)
-  gems.each do |gem|
-    gem gem.name, gem.options
-  end
 
   if gems.any?
+    gems.each do |gem|
+      gem gem.name, gem.options
+    end
     run_bundle
     commit "Additional gems installed: #{gems.map(&:name).join(', ')}"
   else
@@ -309,8 +310,7 @@ section 'Install gems' do
 end
 
 section 'Install Packages' do
-  next
-  selected = SELECTED.map { |name| app.package(name) }
+  selected = selected_packages.map { |name| app.package(name) }
   app.install!(app.required_packages)
   app.install!(selected)
 end
@@ -318,16 +318,9 @@ end
 #  Add or replace files
 #
 section 'Template Files' do
-  get TEMPLATE_FILES_URL + '/templates/README.md',    'README.md',    force: true
-  get TEMPLATE_FILES_URL + '/templates/CHANGELOG.md', 'CHANGELOG.md', force: true
-  gsub_file 'CHANGELOG.md', /\<version\> \(\<release date\>\)/, "#{APP_VERSION} (#{Date.today})"
-  exit
-end
-
-section 'Ignore database.yml' do
-  run 'cp config/database.yml config/database.sample.yml'
-
-  append_to_file '.gitignore', '/config/database.yml'
+  get template_file_url('README.md'),    'README.md',    force: true
+  get template_file_url('CHANGELOG.md'), 'CHANGELOG.md', force: true
+  gsub_file 'CHANGELOG.md', /<version> \(<release date>\)/, "#{APP_VERSION} (#{Date.today})"
 end
 
 #
@@ -335,14 +328,13 @@ end
 #
 
 section 'Update Application generators configuration' do
-  gen_config = {}
-  gen_config[:template_engine] = ':slim'
-  gen_config[:assets] = false
-  gen_config[:scaffold_stylesheet] = false
+  config = {
+    assets: false,
+    template_engine: ':slim',
+    scaffold_stylesheet: false
+  }
 
-  generators = gen_config.collect do |key, value|
-    "    config.generators.#{key} #{value}"
-  end
+  generators = config.collect { |key, value| "    config.generators.#{key} #{value}" }
   application generators.join("\n")
   commit 'Application Generators config updated'
 end
@@ -398,7 +390,7 @@ section 'Cleanup code with rubocop' do
       Enabled: false
 
   RUBOCOP
-  run 'rubocop -a' if SELECTED[:rubocop]
+  run 'rubocop -a' if selected_packages[:rubocop]
   commit 'Rubocop run'
 end
 
