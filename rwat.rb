@@ -150,9 +150,6 @@ app.package(:minitest) do |pack|
     gem.add 'factory_bot_rails', group: %i[development test]
     gem.add 'rubocop-minitest',  group: %i[development test], require: false
   end
-  pack.install do
-    generate "minitest:install"
-  end
 end
 
 app.package(:pt_br) do |pack|
@@ -211,7 +208,7 @@ app.package(:webpack) do |pack|
   pack.install do
     rails_command 'webpacker:install'
 
-    replace 'config/webpacker.yml', 'app/javascript', 'app/frontend'
+    gsub_file 'config/webpacker.yml', 'app/javascript', 'app/frontend', force: true
     run 'mv app/javascript app/frontend'
     run 'rm -rf app/assets'
     run 'rm -rf lib/assets'
@@ -321,8 +318,9 @@ end
 #  Add or replace files
 #
 section 'Template Files' do
-  get TEMPLATE_FILES_URL + '/templates/README.md',    'README.md'
-  get TEMPLATE_FILES_URL + '/templates/CHANGELOG.md', 'CHANGELOG.md'
+  get TEMPLATE_FILES_URL + '/templates/README.md',    'README.md',    force: true
+  get TEMPLATE_FILES_URL + '/templates/CHANGELOG.md', 'CHANGELOG.md', force: true
+  gsub_file 'CHANGELOG.md', /\<version\> \(\<release date\>\)/, "#{APP_VERSION} (#{Date.today})"
   exit
 end
 

@@ -1,58 +1,38 @@
 # rwats
 Rails Web Application Templates
 
-## Usage
+## Default Template (rwat.rb)
 
- Create a new Rails application
+### Features Added
 
-`$ rails new appname -d postgresql`
-
-Run rwat template
-
-`$ rails app:template LOCATION=https:/raw.githubusercontent.com/gferraz/rwats/master/rwat.rb`
-
-If step 3 doesn't work try:
-
-`$ bundle exec rake rails:template LOCATION=https://raw.githubusercontent.com/gferraz/rwats/master/rwat.rb`
-
-Select the options, and wait the installation finishes.
-
- Develop your application
-
-
-## Features Added
-
-### Internationalization
-- pt-BR
-- es (optional)
-
-### Authentication
-- Devise
-- Doorkeeper
-
-### Tools
-- Rubocop
-- Pry
-
-### Other
+- Devise and Doorkeeper
+- GraphQL
+- I18n 
+	- pt-BR translations and inflections
 - Slim template engine
-- GraphQL API language
+- Rspec
+- Template files
+  - README.md
+  - CHAGELOG.md
+  - Welcome page (`/static/index.html`)
 - Webpack
+  - at `app/frontend`
 
-## Rails Configurations
+### Features Removed
+- Rails Asset Pipeline
 
-### Asset pipeline
-- Disabled sprockets
-- assets removed (app, lib, vendor)
-- app/javascript -> app/frontend
-- images     -> app/frontend/images
-- stysheets  -> app/frontend/css
-- javascript -> app/frontend/js
-
-### Aplication files
-
-- README.md
-- CHANGELOG.md
-- Welcome page static#index
+### Features Considered
+- Pagy
+- Tailswind CSS
 
 
+Usage
+-----
+1. Create a new Rails application
+$rails new appname -d postgresql
+2. Run rwat template
+$ rails app:template LOCATION=https://raw.githubusercontent.com/gferraz/rwats/master/rwat.rb
+3. If step 3 doesn't work try:
+$bundle exec rake rails:template LOCATION=https://raw.githubusercontent.com/gferraz/rwats/master/rwat.rb
+4. Select the options, and wait the installation finishes.
+5. Develop your application
