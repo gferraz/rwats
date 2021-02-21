@@ -180,7 +180,12 @@ app.package(:rubocop) do |pack|
     gem.add 'rubocop-rails',    require: false
   end
   pack.install do
-    run 'rubocop -a'
+    binding.irb
+    if File.exist? '.rubocop.yml'
+      say '.rubocop.yml already exists', :blue
+    else
+      get template_file_url('.rubocop.yml'), '.rubocop.yml'
+    end
   end
 end
 
@@ -208,6 +213,9 @@ app.package(:webpack) do |pack|
 
     gsub_file 'config/webpacker.yml', 'app/javascript', 'app/frontend', force: true
     run 'mv app/javascript app/frontend'
+    empty_directory 'app/frontend/assets'
+    empty_directory 'app/frontend/src'
+    empty_directory 'app/frontend/vendor'
     remove_dir 'app/assets'
     remove_dir 'lib/assets'
     remove_dir 'vendor/assets'
@@ -241,16 +249,12 @@ def yaml(path)
   end
 end
 
-def replace(path, old_text, new_text)
+def file_contains?(path, text)
   content = File.read path
-  new_content = content.gsub old_text, new_text
-  if content == new_content
-    say "identical #{path}.", :blue
-  else
-    File.write path, new_content
-    say "#{path} updated.", :green
-  end
+  found = File.read(path).scan(text)
+  found.any?
 end
+
 
 def section(title)
   dashes = '=' * 40
@@ -266,6 +270,13 @@ def template_file_url(template)
   "https://raw.githubusercontent.com/gferraz/rwats/master/templates/#{template}"
 end
 
+def packages_to_install
+  @packages_to_install ||= []
+  @packages_to_install.compact!
+  @packages_to_install.sort!
+  @packages_to_install
+end
+
 def selected_packages
   @selected_packages ||= []
 end
@@ -273,20 +284,19 @@ end
 section 'Application setup selection' do
   puts 'Available packages'
   puts '------------------'
+
   app.packages.each do |pack|
     say "  #{pack.name}: \t#{pack.desc}"
   end
   puts
   if yes? 'Select optional packages? [yN]'
-    puts
-    selected_packages << :devise  if yes?('Authetication with Devise? [yN]')
-    selected_packages << :graphql if yes?('API with Graphql? [yN]')
+    selected_packages << :devise  if yes?('  Authetication with Devise/Doorkeeper? [yN]')
+    selected_packages << :graphql if yes?('  API with Graphql? [yN]')
   end
-  selected_packages << (yes?('Tests with RSpec? [yN]') ? :rspec : :minitest)
+  selected_packages << (yes?('  Tests with RSpec? [yN]') ? :rspec : :minitest)
   puts '--------------------------------'
-  puts 'Packages to be installed'
-  say app.required_packages.map(&:name).join(',')
-  say selected_packages.join(', '), :yellow
+  packages_to_install = app.required_packages.map(&:name) + selected_packages
+  say "Packages to config: #{packages_to_install.join(', ')}", :cyan
   next if yes?('Confirm and continue?')
 
   say 'Nothing installed. Thanks. Good bye', :blue
@@ -317,7 +327,7 @@ end
 
 #  Add or replace files
 #
-section 'Template Files' do
+section 'Create README and CHANGELOG' do
   get template_file_url('README.md'),    'README.md',    force: true
   get template_file_url('CHANGELOG.md'), 'CHANGELOG.md', force: true
   gsub_file 'CHANGELOG.md', /<version> \(<release date>\)/, "#{APP_VERSION} (#{Date.today})"
@@ -343,7 +353,10 @@ end
 # Create an Welcome Page
 #
 section 'Welcome Page' do
-  route "root :to => 'static#index'"
+  if file_contains?('config/routes.rb', /static.index/)
+    say 'static/index page already exists', :blue
+    next
+  end
   generate :controller, 'static', 'index', '--skipe-assets', '--skip-collision-check'
 
   page_file = 'app/views/static/index.html.slim'
@@ -356,41 +369,24 @@ section 'Welcome Page' do
       | template
     pre
       |
-    #{summary.join("\n")}
+    #{summary}
     p
       | Edit me in
       em #{page_file}
   WELCOME
+
+  route "root :to => 'static#index'"
+
   commit 'Welcome page sample added'
 end
 
 section 'Cleanup code with rubocop' do
-  file '.rubocop.yml', <<~RUBOCOP
-    # inherit_from: .rubocop_todo.yml
-
-    Metrics/BlockLength:
-      Exclude:
-        - 'config/**/*'
-
-    # Configuration parameters: AllowHeredoc, AllowURI, URISchemes, IgnoreCopDirectives, IgnoredPatterns.
-    # URISchemes: http, https
-    Metrics/LineLength:
-      Exclude:
-        - 'config/**/*'
-      Max: 120
-
-    Metrics/MethodLength:
-      Max: 20
-
-    Style/BlockComments:
-      Exclude:
-        - 'spec/spec_helper.rb'
-
-    Style/Documentation:
-      Enabled: false
-
-  RUBOCOP
-  run 'rubocop -a' if selected_packages[:rubocop]
+  if File.exists? '.rubocop.yml'
+    say '.rubocop.yml already exists', :blue
+  else
+    get template_file_url('.rubocop.yml'), '.rubocop.yml'
+  end
+  run 'rubocop -a'
   commit 'Rubocop run'
 end
 
