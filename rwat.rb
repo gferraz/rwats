@@ -1,20 +1,6 @@
 #
 # Basic Rails Web Application Template
 #
-TEMPLATE_URL = 'https://github.com/gferraz/rwats'.freeze
-TEMPLATE_NAME = 'rwat'.freeze
-APP_VERSION = '0.0.1'.freeze
-
-SETUP = {
-  application: "#{app_name} #{APP_VERSION}",
-  api: 'none',
-  authentication: 'none',
-  frontend: 'Asset Pipeline',
-  gems: [],
-  locales: ['pt-BR'],
-  template_engines: ['erb, slim'],
-  test: 'minitest'
-}.freeze
 
 class GemList
   Gem = Struct.new(:name, :package, :options)
@@ -35,13 +21,11 @@ end
 
 class Package
   attr_accessor :name, :desc
-  attr_writer :optional
 
   def initialize(name)
     @name = name
     @gem_list = GemList.new(self)
     @installed = false
-    @optional = false
   end
 
   def gems
@@ -54,30 +38,42 @@ class Package
   end
 
   def install!
+    puts '-----------------------------'
+    puts "Installing #{name} - #{desc}"
+
     if installed?
-      puts "#{name} already installed."
+      status = 'previously installed'
+    elsif skip?
+      status = 'skipped'
     else
-      puts "Installing #{name} - #{desc}"
       @script&.call
       @installed = true
+      status = 'installed'
     end
+    puts "  #{name} #{status}"
+    puts '-----------------------------'
   end
 
   def installed?
     @installed
   end
 
-  def required?
-    !@optional
+  def skip?
+    !!@skip&.call
+  end
+
+  def skip_if(&block)
+    @skip = block
   end
 end
 
 class Application
-  attr_reader :name, :packages
+  attr_reader :name, :packages, :version
 
-  def initialize(name)
+  def initialize(name, options: {})
     @name = name
     @packages = []
+    @version = options[:version] || '0.0.1'
   end
 
   def package(name)
@@ -88,44 +84,40 @@ class Application
     package
   end
 
-  def required_packages
-    packages.select(&:required?)
-  end
-
   def gems(packages)
     packages.collect(&:gems).flatten.uniq(&:name)
   end
 
-  def installed_gems
-    gemfile = File.read 'Gemfile'
-    gems(packages).select do |g|
-      found = gemfile.scan /^\s*gem\s+['"]#{g.name}['"]/
-      found.any?
-    end
-  end
-
   def configure(packages_names)
-    selected_packages = packages_names.uniq.map { |name| package(name) }
-    @packages_to_install = required_packages + selected_packages
+    selected_packages = packages_names.map { |name| package(name) }
+    @packages_to_install = packages_to_install + selected_packages
     @packages_to_install.uniq!
   end
 
   def configuration
-    @packages_to_install ? @packages_to_install.map(&:name) : []
+    packages_to_install.map(&:name)
   end
 
-  def included?(name)
-    !!@packages_to_install&.detect(&:name)
+  def packages_to_install
+    @packages_to_install || []
+  end
+
+  def included?(_name)
+    !!packages_to_install.detect(&:name)
   end
 
   def gems_to_install
-    raise StandardError, 'No packages to install, call #configure(packages) first.' unless @packages_to_install
-    gems(@packages_to_install) - installed_gems
+    gemfile = File.read 'Gemfile'
+    selection  = gems(packages_to_install)
+    selection.reject { |g| gemfile.scan(/^\s*gem\s+['"]#{g.name}['"]/).any? }
   end
 
   def install!
-    raise StandardError, 'No packages to install, call #configure(packages) first.' unless @packages_to_install
-    @packages_to_install.each(&:install!)
+    packages_to_install.each(&:install!)
+  end
+
+  def installed_packages
+    packages.select(&:installed?)
   end
 end
 
@@ -133,13 +125,12 @@ app = Application.new(app_name)
 
 app.package(:devise) do |pack|
   pack.desc = 'Devise authetication with doorkeper and i18n'
-  pack.optional = true
+  pack.skip_if { File.exist? 'config/initializers/devise.rb' }
   pack.gems do |gem|
     gem.add 'devise'
     gem.add 'devise-i18n'
     gem.add 'devise-doorkeeper'
   end
-
   pack.install do
     generate 'devise:install'
   end
@@ -147,7 +138,7 @@ end
 
 app.package(:graphql) do |pack|
   pack.desc = 'GraphQL API query language'
-  pack.optional = true
+  pack.skip_if { File.exist? 'app/graphql' }
   pack.gems do |gem|
     gem.add 'graphql'
   end
@@ -158,7 +149,6 @@ end
 
 app.package(:minitest) do |pack|
   pack.desc = 'Minitest test framework'
-  pack.optional = true
   pack.gems do |gem|
     gem.add 'minitest-rails',    group: %i[development test]
     gem.add 'factory_bot_rails', group: %i[development test]
@@ -168,6 +158,7 @@ end
 
 app.package(:pt_br) do |pack|
   pack.desc = 'i18n Localization: pt-BR'
+  pack.skip_if { File.exist? 'config/locales/pt-BR.yml' }
   pack.gems do |gem|
     gem.add 'inflections'
   end
@@ -178,7 +169,7 @@ end
 
 app.package(:rspec) do |pack|
   pack.desc = 'Rspec test framework, along Factory Bot'
-  pack.optional = true
+  pack.skip_if { File.exist? '.rspec' }
   pack.gems do |gem|
     gem.add 'rspec-rails',       group: %i[development test]
     gem.add 'factory_bot_rails', group: %i[development test]
@@ -190,15 +181,15 @@ end
 
 app.package(:rubocop) do |pack|
   pack.desc = 'Rubocop code linter'
+  pack.skip_if { File.exist? '.rubocop.yml' }
   pack.gems do |gem|
     gem.add 'rubocop',          require: false
     gem.add 'rubocop-rails',    require: false
-    if app.included? :minitest
-      gem.add 'rubocop-minitest', group: %i[development test], require: false
-    end
-    if app.included? :rspec
-      gem.add 'rubocop-rspec', group: %i[development test], require: false
-    end
+    gem.add 'rubocop-minitest', group: %i[development test], require: false if app.included? :minitest
+    gem.add 'rubocop-rspec', group: %i[development test], require: false if app.included? :rspec
+  end
+  pack.install do
+    get template_file_url('.rubocop.yml'), '.rubocop.yml'
   end
 end
 
@@ -211,6 +202,7 @@ app.package(:slim) do |pack|
     gem.add 'html2slim', require: false, group: :development
   end
   pack.install do
+    application '    config.generators.template_engine :slim'
     say 'Convert erb scripts to slim'
     run 'erb2slim -d app/views/layouts/*.html.erb'
   end
@@ -218,12 +210,14 @@ end
 
 app.package(:webpack) do |pack|
   pack.desc = 'Webpack'
+  pack.skip_if { File.exist? 'config/webpacker.yml' }
   pack.gems do |gem|
     gem.add 'webpacker'
   end
   pack.install do
     rails_command 'webpacker:install'
-
+    application '    config.generators.assets false'
+    application '    config.generators.scaffold_stylesheet false'
     gsub_file 'config/webpacker.yml', 'app/javascript', 'app/frontend', force: true
     run 'mv app/javascript app/frontend'
     empty_directory 'app/frontend/assets'
@@ -235,19 +229,19 @@ app.package(:webpack) do |pack|
   end
 end
 
+app.package(:generic) do |pack|
+  pack.desc = 'Generic changes: Add README, CHANGELOG'
+  pack.skip_if { File.exist? 'CHANGELOG.md' }
+  pack.install do
+    get template_file_url('README.md'),    'README.md',    force: true
+    get template_file_url('CHANGELOG.md'), 'CHANGELOG.md', force: true
+    gsub_file 'CHANGELOG.md', /<version> \(<release date>\)/, "#{app.version} (#{Date.today})"
+  end
+end
+
 def commit(message)
   git add: '.'
   git commit: %(-m '#{message}')
-end
-
-def summary
-  sum = SETUP.collect do |attribute, value|
-    attribute = attribute.name.titleize
-    val = value.is_a?(Array) ? value.join(', ') : value.to_s
-    dots = '.' * (60 - attribute.size - val.size)
-    "#{attribute}: #{dots} #{val}"
-  end
-  sum.join("\n")
 end
 
 def yaml(path)
@@ -255,7 +249,7 @@ def yaml(path)
   new_yaml = yaml.deep_dup
   yield new_yaml
   if yaml == new_yaml
-    say "identical #{path}.", :blue
+    say "identical #{path}.", :cyan
   else
     File.write path, new_yaml
     say "#{path} updated.", :green
@@ -267,7 +261,6 @@ def file_contains?(path, text)
   found = File.read(path).scan(text)
   found.any?
 end
-
 
 def section(title)
   dashes = '=' * 40
@@ -284,16 +277,22 @@ def template_file_url(template)
 end
 
 section 'Application setup selection' do
-  puts 'Available packages'
-  puts '------------------'
-
+  say 'Available packages'
+  say '------------------'
   app.packages.each do |pack|
     say "  #{pack.name}: \t#{pack.desc}"
   end
-  puts
+  say
+  say 'Default packages'
+  say '----------------'
+  app.configure %i[pt_br rubocop slim webpack generic]
+  app.packages_to_install.each do |pack|
+    say "  #{pack.name}: \t#{pack.desc}"
+  end
+  say
   selected_packages = []
-  if yes? 'Select optional packages? [yN]'
-    selected_packages << :devise  if yes?('  Authetication with Devise/Doorkeeper? [yN]')
+  if yes? 'Add optional packages? [yN]'
+    selected_packages << :devise  if yes?('  Authentication with Devise? [yN]')
     selected_packages << :graphql if yes?('  API with Graphql? [yN]')
   end
   selected_packages << (yes?('  Tests with RSpec? [yN]') ? :rspec : :minitest)
@@ -303,7 +302,7 @@ section 'Application setup selection' do
   say "Packages to set up: #{app.configuration.join(', ')}", :cyan
   next if yes?('Confirm and continue?')
 
-  say 'Nothing installed. Thanks. Good bye', :blue
+  say 'Nothing installed. Thanks. Good bye', :cyan
   exit
 end
 
@@ -316,38 +315,15 @@ section 'Install gems' do
     run_bundle
     commit "Additional gems installed: #{gems.map(&:name).join(', ')}"
   else
-    say 'No new gems were added.', :blue
+    say 'No new gems were added.', :cyan
   end
   say 'Gems instalation complete', :green
 end
 
 section 'Install Packages' do
   app.install!
-  say "-" * 40, :yellow
-end
-
-#  Add or replace files
-#
-section 'Create README and CHANGELOG' do
-  get template_file_url('README.md'),    'README.md',    force: true
-  get template_file_url('CHANGELOG.md'), 'CHANGELOG.md', force: true
-  gsub_file 'CHANGELOG.md', /<version> \(<release date>\)/, "#{APP_VERSION} (#{Date.today})"
-end
-
-#
-# Application Configuration
-#
-
-section 'Update Application generators configuration' do
-  config = {
-    assets: false,
-    template_engine: ':slim',
-    scaffold_stylesheet: false
-  }
-
-  generators = config.collect { |key, value| "    config.generators.#{key} #{value}" }
-  application generators.join("\n")
-  commit 'Application Generators config updated'
+  say '-' * 40, :yellow
+  commit "#{app.installed_packages.map(&:name)} Installed"
 end
 
 #
@@ -355,7 +331,7 @@ end
 #
 section 'Welcome Page' do
   if file_contains?('config/routes.rb', /static.index/)
-    say 'static/index page already exists', :blue
+    say 'static/index page already exists', :cyan
     next
   end
   generate :controller, 'static', 'index', '--skipe-assets', '--skip-collision-check'
@@ -365,9 +341,8 @@ section 'Welcome Page' do
   prepend_to_file page_file, <<~WELCOME
     h1 #{app_name.titleize} Home Page
     p
-      | Generated with Rails web application template (rwat)
-      a(href='#{TEMPLATE_URL}') #{TEMPLATE_NAME}
-      | template
+      | Generated with Rails web application
+      a href='https://github.com/gferraz/rwats' rwat template
     pre
       |
     #{summary}
@@ -381,23 +356,12 @@ section 'Welcome Page' do
   commit 'Welcome page sample added'
 end
 
-section 'rubocop plugins' do
-  if File.exists? '.rubocop.yml'
-    say '.rubocop.yml already exists', :blue
-  else
-    get template_file_url('.rubocop.yml'), '.rubocop.yml'
-    reqs = []
-    reqs << "  - rubocop-minitest"   if app.package(:minitest).installed?
-    reqs << "  - rubocop-rspec"      if app.package(:rspec).installed?
-    insert_into_file '.rubocop.yml',  reqs.join("\n"), after: "require:\n"
-    run 'rubocop -a'
-    commit 'Rubocop run'
+section 'Rubocop add test plugins and run' do
+  if app.package(:minitest).installed?
+    insert_into_file '.rubocop.yml',  "  - rubocop-minitest\n", after: "require:\n"
+  elsif app.package(:rspec).installed?
+    insert_into_file '.rubocop.yml',  "  - rubocop-rspec\n", after: "require:\n"
   end
-end
-
-#
-# Print template summary
-#
-section 'Configuration Summary' do
-  puts summary
+  run 'rubocop -a --auto-gen-config'
+  commit 'Rubocop first run'
 end
