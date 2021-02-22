@@ -55,9 +55,9 @@ class Package
 
   def install!
     if installed?
-      say "#{name} already installed.", :blue
+      puts "#{name} already installed."
     else
-      puts "Installing #{name} script"
+      puts "Installing #{name} - #{desc}"
       @script&.call
       @installed = true
     end
@@ -182,7 +182,6 @@ app.package(:rspec) do |pack|
   pack.gems do |gem|
     gem.add 'rspec-rails',       group: %i[development test]
     gem.add 'factory_bot_rails', group: %i[development test]
-    gem.add 'rubocop-rspec',     group: %i[development test], require: false
   end
   pack.install do
     generate 'rspec:install'
@@ -194,6 +193,12 @@ app.package(:rubocop) do |pack|
   pack.gems do |gem|
     gem.add 'rubocop',          require: false
     gem.add 'rubocop-rails',    require: false
+    if app.included? :minitest
+      gem.add 'rubocop-minitest', group: %i[development test], require: false
+    end
+    if app.included? :rspec
+      gem.add 'rubocop-rspec', group: %i[development test], require: false
+    end
   end
 end
 
@@ -318,6 +323,7 @@ end
 
 section 'Install Packages' do
   app.install!
+  say "-" * 40, :yellow
 end
 
 #  Add or replace files
