@@ -181,12 +181,11 @@ end
 
 app.package(:rubocop) do |pack|
   pack.desc = 'Rubocop code linter'
-  pack.skip_if { File.exist? '.rubocop.yml' }
   pack.gems do |gem|
     gem.add 'rubocop',          require: false
     gem.add 'rubocop-rails',    require: false
     gem.add 'rubocop-minitest', group: %i[development test], require: false if app.included? :minitest
-    gem.add 'rubocop-rspec', group: %i[development test], require: false if app.included? :rspec
+    gem.add 'rubocop-rspec',    group: %i[development test], require: false if app.included? :rspec
   end
   pack.install do
     get template_file_url('.rubocop.yml'), '.rubocop.yml'
@@ -203,8 +202,9 @@ app.package(:slim) do |pack|
   end
   pack.install do
     application '    config.generators.template_engine :slim'
-    say 'Convert erb scripts to slim'
-    run 'erb2slim -d app/views/layouts/*.html.erb'
+    # TODO: Not working
+    #say 'Convert erb scripts to slim'
+    #run 'erb2slim -d app/views/layouts/*.html.erb'
   end
 end
 
@@ -343,9 +343,7 @@ section 'Welcome Page' do
     p
       | Generated with Rails web application
       a href='https://github.com/gferraz/rwats' rwat template
-    pre
-      |
-    #{summary}
+    pre Summary
     p
       | Edit me in
       em #{page_file}
