@@ -123,6 +123,18 @@ end
 
 app = Application.new(app_name)
 
+
+app.package(:action_policy) do |pack|
+  pack.desc = 'Action Policy authorization'
+  pack.skip_if { File.exist? 'app/policies' }
+  pack.gems do |gem|
+    gem.add 'action_policy'
+  end
+  pack.install do
+    generate 'action_policy:install'
+  end
+end
+
 app.package(:devise) do |pack|
   pack.desc = 'Devise authetication with doorkeper and i18n'
   pack.skip_if { File.exist? 'config/initializers/devise.rb' }
@@ -141,6 +153,7 @@ app.package(:graphql) do |pack|
   pack.skip_if { File.exist? 'app/graphql' }
   pack.gems do |gem|
     gem.add 'graphql'
+    gem "action_policy-graphql"
   end
   pack.install do
     generate 'graphql:install'
@@ -285,7 +298,7 @@ section 'Application setup selection' do
   say
   say 'Default packages'
   say '----------------'
-  app.configure %i[pt_br rubocop slim webpack generic]
+  app.configure %i[action_policy generic pt_br rubocop slim webpack ]
   app.packages_to_install.each do |pack|
     say "  #{pack.name}: \t#{pack.desc}"
   end
