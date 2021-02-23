@@ -229,21 +229,31 @@ app.package(:webpack) do |pack|
   end
   pack.install do
     rails_command 'webpacker:install'
-    application '    config.generators.assets false'
-    application '    config.generators.scaffold_stylesheet false'
-    gsub_file 'config/webpacker.yml', 'app/javascript', 'app/frontend', force: true
-    run 'mv app/javascript app/frontend'
-    empty_directory 'app/frontend/assets'
-    empty_directory 'app/frontend/src'
-    empty_directory 'app/frontend/vendor'
-    remove_dir 'app/assets'
-    remove_dir 'lib/assets'
-    remove_dir 'vendor/assets'
+    # application '    config.generators.assets false'
+    # application '    config.generators.scaffold_stylesheet false'
+    # gsub_file 'config/webpacker.yml', 'app/javascript', 'app/frontend', force: true
+    # run 'mv app/javascript app/frontend'
+    # empty_directory 'app/frontend/assets'
+    # empty_directory 'app/frontend/src'
+    # empty_directory 'app/frontend/vendor'
+    # remove_dir 'app/assets'
+    # remove_dir 'lib/assets'
+    # remove_dir 'vendor/assets'
   end
 end
 
-app.package(:generic) do |pack|
-  pack.desc = 'Generic changes: Add README, CHANGELOG'
+app.package(:tailwind) do |pack|
+  pack.desc = 'Tailwind CSS'
+  pack.gems do |gem|
+    gem.add 'tailwindcss-rails'
+  end
+  pack.install do
+    rails_command 'tailwindcss:install:webpacker'
+  end
+end
+
+app.package(:docs) do |pack|
+  pack.desc = 'Add README and CHANGELOG'
   pack.skip_if { File.exist? 'CHANGELOG.md' }
   pack.install do
     get template_file_url('README.md'),    'README.md',    force: true
@@ -298,7 +308,7 @@ section 'Application setup selection' do
   say
   say 'Default packages'
   say '----------------'
-  app.configure %i[action_policy generic pt_br rubocop slim webpack ]
+  app.configure %i[action_policy docs pt_br rubocop slim webpack tailwind]
   app.packages_to_install.each do |pack|
     say "  #{pack.name}: \t#{pack.desc}"
   end
