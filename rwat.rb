@@ -2,6 +2,9 @@
 # Basic Rails Web Application Template
 #
 
+require 'open3'
+require 'stringio'
+
 class GemList
   Gem = Struct.new(:name, :package, :options)
 
@@ -16,6 +19,17 @@ class GemList
     gem = Gem.new name, @package, options
     @gems << gem
     gem
+  end
+
+  def bundled_gems
+    stdout, stderr, _status = Open3.capture3('bundle list')
+    if stderr.present?
+      say stderr, :red
+      exit
+    end
+    stdout.scan(/([\w-]+) \((.+)\)/).map do |match|
+      puts "#{match.first} '= #{match.second}'"
+    end
   end
 end
 
@@ -108,7 +122,7 @@ class Application
 
   def gems_to_install
     gemfile = File.read 'Gemfile'
-    selection  = gems(packages_to_install)
+    selection = gems(packages_to_install)
     selection.reject { |g| gemfile.scan(/^\s*gem\s+['"]#{g.name}['"]/).any? }
   end
 
@@ -122,7 +136,6 @@ class Application
 end
 
 app = Application.new(app_name)
-
 
 app.package(:action_policy) do |pack|
   pack.desc = 'Action Policy authorization'
@@ -153,7 +166,7 @@ app.package(:graphql) do |pack|
   pack.skip_if { File.exist? 'app/graphql' }
   pack.gems do |gem|
     gem.add 'graphql'
-    gem "action_policy-graphql"
+    gem.add 'action_policy-graphql'
   end
   pack.install do
     generate 'graphql:install'
@@ -216,8 +229,8 @@ app.package(:slim) do |pack|
   pack.install do
     application '    config.generators.template_engine :slim'
     # TODO: Not working
-    #say 'Convert erb scripts to slim'
-    #run 'erb2slim -d app/views/layouts/*.html.erb'
+    # say 'Convert erb scripts to slim'
+    # run 'erb2slim -d app/views/layouts/*.html.erb'
   end
 end
 
@@ -280,7 +293,6 @@ def yaml(path)
 end
 
 def file_contains?(path, text)
-  content = File.read path
   found = File.read(path).scan(text)
   found.any?
 end
@@ -353,13 +365,13 @@ end
 # Create an Welcome Page
 #
 section 'Welcome Page' do
-  if file_contains?('config/routes.rb', /static.index/)
-    say 'static/index page already exists', :cyan
+  if file_contains?('config/routes.rb', /public.index/)
+    say 'public/index page already exists', :cyan
     next
   end
-  generate :controller, 'static', 'index', '--skipe-assets', '--skip-collision-check'
+  generate :controller, 'public', 'index', '--skipe-assets', '--skip-collision-check'
 
-  page_file = 'app/views/static/index.html.slim'
+  page_file = 'app/views/public/index.html.slim'
 
   prepend_to_file page_file, <<~WELCOME
     h1 #{app_name.titleize} Home Page
@@ -372,7 +384,7 @@ section 'Welcome Page' do
       em #{page_file}
   WELCOME
 
-  route "root :to => 'static#index'"
+  route "root :to => 'public#index'"
 
   commit 'Welcome page sample added'
 end
